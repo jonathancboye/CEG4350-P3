@@ -10,6 +10,8 @@
 
 #define MEMORYSIZE 5000
 
+typedef unsigned char mtype;
+
 //contains the condition codes
 typedef struct ConditionCodes {
 	uint8_t zf:1;
@@ -47,11 +49,40 @@ int main(int argc, char *argv[]) {
 	Register ebx;
 	Register esi;
 	Register edi;
-	Register esp;
+	Register esp; //stack pointer register
 	Register ebp;
-	Register PC; //program counter
+	int PC; //program counter
 	ConditionCodes cc;
-	char *memory = calloc(MEMORYSIZE, sizeof(char)); //Main memory for y86
+	mtype *memory = calloc(MEMORYSIZE, sizeof(mtype)); //Main memory for y86
+
+	/* setup input */
+	memory[0] = 0x10;
+	memory[1] = 0x00;
+
+	/* initialize program counter and flags and registers*/
+	PC = 0;
+	cc.zf = 0;
+	cc.sf = 0;
+	cc.of = 0;
+	eax.integer = 0;
+	ecx.integer = 0;
+	edx.integer = 0;
+	esi.integer = 0;
+	edi.integer = 0;
+	esp.integer = 0;
+	esp.integer = 0;
+	ebp.integer = 0;
+
+	/* fetch, decode, execute - loop*/
+	while(1) {
+		/* Fetch && Decode */
+
+		/* Execute */
+
+		/* Update PC */
+		PC++;
+	}
+
 
 
 	return EXIT_SUCCESS;
