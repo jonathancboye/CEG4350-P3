@@ -24,14 +24,15 @@ typedef struct ConditionCodes {
 	uint8_t of:1;
 } ConditionCodes;
 
-//Register
-//	integer: full register, 32bits
-//	upper: upper half of the register, 16bits
-//  lower: lower half of the register, 16bits
-//	byte_1: first byte, 8bits
-//	byte_2: second byte, 8bits
-//	byte_3: third byte, 8bits
-//	byte_4: fourth byte, 8bits
+/*Registers
+ * integer: full register, 32bits
+ * upper: upper half of the register, 16bits
+ * lower: lower half of the register, 16bits
+ * byte_1: first byte, 8bits
+ * byte_2: second byte, 8bits
+ * byte_3: third byte, 8bits
+ * byte_4: fourth byte, 8bits
+ */
 typedef union registers {
 	uint32_t integer:32;
 	struct sections {
