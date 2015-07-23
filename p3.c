@@ -4,6 +4,11 @@
  *  Created on: Jul 21, 2015
  *      Author: jon
  */
+
+/* NEXT TASK
+ * Figure out proper length for program counter
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -51,7 +56,7 @@ int main(int argc, char *argv[]) {
 	Register edi;
 	Register esp; //stack pointer register
 	Register ebp;
-	int PC; //program counter
+	int PC; //program counter, points to next instruction in memory
 	ConditionCodes cc;
 	mtype *memory = calloc(MEMORYSIZE, sizeof(mtype)); //Main memory for y86
 
@@ -73,9 +78,25 @@ int main(int argc, char *argv[]) {
 	esp.integer = 0;
 	ebp.integer = 0;
 
+
 	/* fetch, decode, execute - loop*/
 	while(1) {
 		/* Fetch && Decode */
+
+		//Read in first byte
+		switch(memory[PC]) {
+
+		case 0x00: 				//halt instruction
+			printf("HALT\n");
+			return EXIT_SUCCESS;
+
+		case 0x10: 				//nop instruction
+			printf("NOP\n");
+			break;
+
+		default: 				//error
+			printf("Something didn't work");
+		}
 
 		/* Execute */
 
