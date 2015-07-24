@@ -5,12 +5,18 @@
  *      Author: jon
  */
 
+/*
+ * TASKS
+ * 	Need to make sure bit fields are portable
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 
 #define MEMORYSIZE 5000
 #define DEBUG 1 //turn debugging on or off
+
 
 typedef char mtype;
 
@@ -73,6 +79,7 @@ typedef union {
 
 
 void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
+void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
 
 
 int main(int argc, char *argv[]) {
@@ -105,8 +112,12 @@ int main(int argc, char *argv[]) {
 	memory[5] = 0x01;
 	memory[6] = 0x20;
 
+	//rrmovl register 0 -> register 3
+	memory[7] = 0x20;
+	memory[8] = 0x03;
+
 	//halt
-	memory[7] = 0x00;
+	memory[9] = 0x00;
 
 	/* initialize program counter and flags and registers*/
 	PC = 0;
@@ -131,16 +142,22 @@ int main(int argc, char *argv[]) {
 			return EXIT_SUCCESS;
 
 		case 0x10: 					//nop instruction
-			instructionLength = 1;
+
 			if(DEBUG) {
 				printf("NOP\n");
 			}
+			instructionLength = 1;
 			break;
 
 		case 0x20:					//rrmovl - Register -> Register
+			/*
+			 * Byte offsets
+			 * 	1: [source register id, destination register id]
+			 */
 			if(DEBUG) {
-				printf("rrmovl");
+				printf("rrmovl: 0x20");
 			}
+			rrmovl(PC, memory, regs);
 			break;
 
 		case 0x30:					//irmovl - immediate -> Register
@@ -149,10 +166,11 @@ int main(int argc, char *argv[]) {
 			 * 	1: [0x8, register to store value]
 			 * 	2 - 5: [value]
 			 */
-			instructionLength = 6;
+
 			if(DEBUG) {
 				printf("irmovl: 0x30");
 			}
+			instructionLength = 6;
 			irmovl(PC, memory, regs);
 			break;
 
@@ -172,7 +190,7 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 	Byte b; //next byte
 	int id; //register id
 
-	//get second byte : [upper nibble has register id, lower nibble should have 8 for instruction]
+	//get second byte: [upper nibble has register id, lower nibble should have 8 for instruction]
 	b.byte = memory[PC + 1];
 
 	//verify last nibble of instruction
@@ -181,7 +199,6 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		id = b.nibbles.lower;
 
 		//move next 4 bytes into register
-		//ugly: *((uint32_t*)&memory[PC + 2])
 		regs[id].bytes.byte_1 = memory[PC + 2];
 		regs[id].bytes.byte_2 = memory[PC + 3];
 		regs[id].bytes.byte_3 = memory[PC + 4];
@@ -194,5 +211,22 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 	} else {
 		printf("Something is wrong!!");
 		exit(1);
+	}
+}
+
+void rrmovl(int PC, mtype *memory, Register *regs) {
+	Byte b; //next byte
+	int idS; //source register id;
+	int idD; //destination register id;
+
+	//get source and destination registers
+	b.byte = memory[PC + 1];
+	idS = b.nibbles.lower;
+	idD = b.nibbles.upper;
+
+	//move contents of source register into destination register
+	regs[idD] = regs[idS];
+	if(DEBUG) {
+		printf(" 0x%d%d\n", idS,idD);
 	}
 }
