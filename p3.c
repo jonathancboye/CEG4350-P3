@@ -124,26 +124,26 @@ int main(int argc, char *argv[]) {
 		//Read in first byte
 		switch(memory[PC]) {
 
-		case 0x00: 				//halt instruction
+		case 0x00: 					//halt instruction
 			if(DEBUG) {
 				printf("HALT\n");
 			}
 			return EXIT_SUCCESS;
 
-		case 0x10: 				//nop instruction
+		case 0x10: 					//nop instruction
 			instructionLength = 1;
 			if(DEBUG) {
 				printf("NOP\n");
 			}
 			break;
 
-		case 0x20:
+		case 0x20:					//rrmovl - Register -> Register
 			if(DEBUG) {
-				printf("rrmovl");	//rrmovl - Register -> Register
+				printf("rrmovl");
 			}
 			break;
 
-		case 0x30:
+		case 0x30:					//irmovl - immediate -> Register
 			/*
 			 * Byte offsets
 			 * 	1: [0x8, register to store value]
@@ -151,24 +151,19 @@ int main(int argc, char *argv[]) {
 			 */
 			instructionLength = 6;
 			if(DEBUG) {
-				printf("irmovl: 0x30"); 	//irmovl - immediate -> Register
+				printf("irmovl: 0x30");
 			}
 			irmovl(PC, memory, regs);
 			break;
 
-		default: 				//error
+		default: 					//error
 			printf("Something didn't work");
 			/* no break */
 		}
 
-
-		/* Execute */
-
 		/* Update PC */
 		PC += instructionLength;
 	}
-
-
 
 	return EXIT_SUCCESS;
 }
