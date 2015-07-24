@@ -77,10 +77,11 @@ typedef union {
 	Bits bits;
 }Byte;
 
+void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r);
 
 void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
 void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
-
+void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 
 int main(int argc, char *argv[]) {
 	/* 32bit program registers */
@@ -92,7 +93,7 @@ int main(int argc, char *argv[]) {
 	Register edi;
 	Register esp; //stack pointer register
 	Register ebp;
-	Register regs[8] = {eax, ecx, edx, ebx, esi, edi, esp, ebp};
+	Register regs[8] = {eax, ecx, edx, ebx, esp, ebp, esi, edi};
 	int i, PC; //program counter, points to next instruction in memory
 	int instructionLength; //number of bytes that make up an instruction
 	ConditionCodes cc;
@@ -100,37 +101,56 @@ int main(int argc, char *argv[]) {
 
 	/* setup input */
 
+	i = 0;
 	//nop
-	memory[0] = 0x10;
+	memory[i++] = 0x10;
 
 	//irmovl register 0 <--- 0x20010403
-	memory[1] = 0x30;
-	memory[2] = 0x80;
+	memory[i++] = 0x30;
+	memory[i++] = 0x80;
 	//value
-	memory[3] = 0x03;
-	memory[4] = 0x04;
-	memory[5] = 0x01;
-	memory[6] = 0x20;
+	memory[i++] = 0x03;
+	memory[i++] = 0x04;
+	memory[i++] = 0x01;
+	memory[i++] = 0x20;
 
 	//rrmovl register 0 -> register 3
-	memory[7] = 0x20;
-	memory[8] = 0x03;
+	memory[i++] = 0x20;
+	memory[i++] = 0x03;
 
 	//irmovl register 3 <--- 0x11220000
-	memory[9] = 0x30;
-	memory[10] = 0x83;
+	memory[i++] = 0x30;
+	memory[i++] = 0x82;
 	//value
-	memory[11] = 0x00;
-	memory[12] = 0x00;
-	memory[13] = 0x22;
-	memory[14] = 0x11;
+	memory[i++] = 0xcd;
+	memory[i++] = 0xab;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
 
 	//rrmovl register 3 -> register 6
-	memory[15] = 0x20;
-	memory[16] = 0x36;
+	memory[i++] = 0x20;
+	memory[i++] = 0x36;
+
+	//irmovl register 1 <--- 0x00000030
+	memory[i++] = 0x30;
+	memory[i++] = 0x81;
+	//value
+	memory[i++] = 0x30;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+
+	//rmmovl register 0 -> 0x03(register 1)
+	memory[i++] = 0x40;
+	memory[i++] = 0x01;
+	//value
+	memory[i++] = 0x03;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
 
 	//halt
-	memory[17] = 0x00;
+	memory[i++] = 0x00;
 
 	/* initialize program counter and flags and registers*/
 	PC = 0;
@@ -140,6 +160,7 @@ int main(int argc, char *argv[]) {
 	for(i=0;i < 8; ++i) {
 		regs[i].reg = 0;
 	}
+	regs[4].reg = MEMORYSIZE - 1;
 
 	/* fetch, decode, execute - loop*/
 	while(1) {
@@ -167,9 +188,6 @@ int main(int argc, char *argv[]) {
 			 * Byte offsets
 			 * 	1: [source register id, destination register id]
 			 */
-			if(DEBUG) {
-				printf("rrmovl: 0x20");
-			}
 			instructionLength = 2;
 			rrmovl(PC, memory, regs);
 			break;
@@ -180,29 +198,36 @@ int main(int argc, char *argv[]) {
 			 * 	1: [0x8, register to store value]
 			 * 	2 - 5: [value]
 			 */
-
-			if(DEBUG) {
-				printf("irmovl: 0x30");
-			}
 			instructionLength = 6;
 			irmovl(PC, memory, regs);
 			break;
 
+		case 0x40:
+			/*
+			 * Byte offsets
+			 *  1: [source register, base register]
+			 *  2-5: [value of offset]
+			 */
+			instructionLength = 6;
+			rmmovl(PC, memory, regs);
+			break;
 		default: 					//error
 			printf("Something didn't work\n");
 			/* no break */
 		}
 
-		printf("===Contents of Registers in HEX===\n");
-		for(i=0;i < 8; ++i) {
+		if(DEBUG) {
+			printf("===Contents of Registers in HEX===\n");
+			for(i=0;i < 8; ++i) {
 
-					printf("register id: %d,  %2x %2x %2x %2x\n", i,
-							regs[i].bytes.byte_4, regs[i].bytes.byte_3,
-							regs[i].bytes.byte_2, regs[i].bytes.byte_1);
+				printf("register id: %d,  %2x %2x %2x %2x\n", i,
+						regs[i].bytes.byte_4, regs[i].bytes.byte_3,
+						regs[i].bytes.byte_2, regs[i].bytes.byte_1);
 
+			}
+			printf("===End Contents===\n\n");
 		}
 
-		printf("===End Contents===\n");
 		/* Update PC */
 		PC += instructionLength;
 	}
@@ -229,7 +254,7 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		regs[id].bytes.byte_4 = memory[PC + 5];
 
 		if(DEBUG) {
-			printf(" 0x%d%d 0x%2x\n", b.nibbles.upper, id, regs[id].reg);
+			printInstruction_6("irmovl", 0x30, id, b.nibbles.upper, regs[id]);
 		}
 
 	} else {
@@ -251,6 +276,42 @@ void rrmovl(int PC, mtype *memory, Register *regs) {
 	//move contents of source register into destination register
 	regs[idD].reg = regs[idS].reg;
 	if(DEBUG) {
-		printf(" 0x%d%d\n", idS,idD);
+		printf("rrmovl: 20 %d%d\n", idS,idD);
 	}
+}
+
+void rmmovl(int PC, mtype *memory, Register *regs) {
+	Byte b;
+	int idS; //source register id
+	int idB; //base register id
+	int address; //address to write to
+	Register offset;
+
+	b.byte = memory[PC + 1];
+	idS = b.nibbles.upper;
+	idB = b.nibbles.lower;
+	offset.bytes.byte_1 = memory[PC + 2];
+	offset.bytes.byte_2 = memory[PC + 3];
+	offset.bytes.byte_3 = memory[PC + 4];
+	offset.bytes.byte_4 = memory[PC + 5];
+	address = regs[idB].reg + offset.reg;
+
+	//write source register to memory if within memory bounds
+	if(address + 3 < regs[4].reg) {
+		memory[address] = regs[idS].bytes.byte_1;
+		memory[address + 1] = regs[idS].bytes.byte_2;
+		memory[address + 2] = regs[idS].bytes.byte_3;
+		memory[address + 3] = regs[idS].bytes.byte_4;
+		if(DEBUG) {
+			printInstruction_6("rmmovl", 0x40, idS, idB, offset);
+		}
+	} else {
+		printf("Writing to out of bounds memory address");
+		exit(1);
+	}
+}
+
+void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
+	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibl, nibu,
+			r.bytes.byte_1, r.bytes.byte_2, r.bytes.byte_3, r.bytes.byte_4);
 }
