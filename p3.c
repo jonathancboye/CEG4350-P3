@@ -44,10 +44,10 @@ typedef struct {
 }Nibbles;
 
 typedef struct {
-	uint32_t byte_1:8; //most significant byte
+	uint32_t byte_1:8; //least significant byte
 	uint32_t byte_2:8;
 	uint32_t byte_3:8;
-	uint32_t byte_4:8; //least significant byte
+	uint32_t byte_4:8; //most significant byte
 }Bytes;
 
 typedef struct {
@@ -103,9 +103,9 @@ int main(int argc, char *argv[]) {
 	//nop
 	memory[0] = 0x10;
 
-	//irmovl register 0 <--- 0x0403
+	//irmovl register 0 <--- 0x20010403
 	memory[1] = 0x30;
-	memory[2] = 0x83;
+	memory[2] = 0x80;
 	//value
 	memory[3] = 0x03;
 	memory[4] = 0x04;
@@ -116,8 +116,21 @@ int main(int argc, char *argv[]) {
 	memory[7] = 0x20;
 	memory[8] = 0x03;
 
+	//irmovl register 3 <--- 0x11220000
+	memory[9] = 0x30;
+	memory[10] = 0x83;
+	//value
+	memory[11] = 0x00;
+	memory[12] = 0x00;
+	memory[13] = 0x22;
+	memory[14] = 0x11;
+
+	//rrmovl register 3 -> register 6
+	memory[15] = 0x20;
+	memory[16] = 0x36;
+
 	//halt
-	memory[9] = 0x00;
+	memory[17] = 0x00;
 
 	/* initialize program counter and flags and registers*/
 	PC = 0;
@@ -157,6 +170,7 @@ int main(int argc, char *argv[]) {
 			if(DEBUG) {
 				printf("rrmovl: 0x20");
 			}
+			instructionLength = 2;
 			rrmovl(PC, memory, regs);
 			break;
 
@@ -175,10 +189,20 @@ int main(int argc, char *argv[]) {
 			break;
 
 		default: 					//error
-			printf("Something didn't work");
+			printf("Something didn't work\n");
 			/* no break */
 		}
 
+		printf("===Contents of Registers in HEX===\n");
+		for(i=0;i < 8; ++i) {
+
+					printf("register id: %d,  %2x %2x %2x %2x\n", i,
+							regs[i].bytes.byte_4, regs[i].bytes.byte_3,
+							regs[i].bytes.byte_2, regs[i].bytes.byte_1);
+
+		}
+
+		printf("===End Contents===\n");
 		/* Update PC */
 		PC += instructionLength;
 	}
@@ -209,7 +233,7 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		}
 
 	} else {
-		printf("Something is wrong!!");
+		printf("Something is wrong!!\n");
 		exit(1);
 	}
 }
@@ -221,11 +245,11 @@ void rrmovl(int PC, mtype *memory, Register *regs) {
 
 	//get source and destination registers
 	b.byte = memory[PC + 1];
-	idS = b.nibbles.lower;
-	idD = b.nibbles.upper;
+	idD = b.nibbles.lower;
+	idS = b.nibbles.upper;
 
 	//move contents of source register into destination register
-	regs[idD] = regs[idS];
+	regs[idD].reg = regs[idS].reg;
 	if(DEBUG) {
 		printf(" 0x%d%d\n", idS,idD);
 	}
