@@ -24,14 +24,14 @@ typedef struct {
 } ConditionCodes;
 
 typedef struct {
-	uint8_t bit_1:1;
+	uint8_t bit_1:1; //least significant bit
 	uint8_t bit_2:1;
 	uint8_t bit_3:1;
 	uint8_t bit_4:1;
 	uint8_t bit_5:1;
 	uint8_t bit_6:1;
 	uint8_t bit_7:1;
-	uint8_t bit_8:1;
+	uint8_t bit_8:1; //most significant bit
 }Bits;
 
 typedef struct {
@@ -39,11 +39,17 @@ typedef struct {
 	uint8_t upper:4;
 }Nibbles;
 
+typedef union {
+	uint8_t byte;
+	Nibbles nibbles;
+	Bits bits;
+}Byte;
+
 typedef struct {
-	uint32_t byte_1:8; //least significant byte
-	uint32_t byte_2:8;
-	uint32_t byte_3:8;
-	uint32_t byte_4:8; //most significant byte
+	Byte byte_1; //least significant byte
+	Byte byte_2;
+	Byte byte_3;
+	Byte byte_4; //most significant byte
 }Bytes;
 
 typedef struct {
@@ -60,18 +66,12 @@ typedef struct {
  * byte_3: third byte, 8bits
  * byte_4: fourth byte, 8bits
  */
-
 typedef union {
-	uint32_t reg;
+	uint32_t dword;
 	Words words;
 	Bytes bytes;
 }Register;
 
-typedef union {
-	uint8_t byte;
-	Nibbles nibbles;
-	Bits bits;
-}Byte;
 
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r);
 
@@ -137,9 +137,9 @@ int main(int argc, char *argv[]) {
 	cc.sf = 0;
 	cc.of = 0;
 	for(i=0;i < 8; ++i) {
-		regs[i].reg = 0;
+		regs[i].dword = 0;
 	}
-	regs[4].reg = MEMORYSIZE - 1;
+	regs[4].dword = MEMORYSIZE - 1;
 	halted = 0;
 	/* fetch, decode, execute - loop*/
 	while(!halted) {
@@ -184,8 +184,8 @@ int main(int argc, char *argv[]) {
 			printf("===Contents of Registers in HEX===\n");
 			for(i=0;i < 8; ++i) {
 				printf("register id: %d,  %2x %2x %2x %2x\n", i,
-						regs[i].bytes.byte_4, regs[i].bytes.byte_3,
-						regs[i].bytes.byte_2, regs[i].bytes.byte_1);
+						regs[i].bytes.byte_4.byte, regs[i].bytes.byte_3.byte,
+						regs[i].bytes.byte_2.byte, regs[i].bytes.byte_1.byte);
 			}
 			printf("===End Contents===\n\n");
 		}
@@ -217,10 +217,10 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		id = b.nibbles.lower;
 
 		//move next 4 bytes into register
-		regs[id].bytes.byte_1 = memory[PC + 2];
-		regs[id].bytes.byte_2 = memory[PC + 3];
-		regs[id].bytes.byte_3 = memory[PC + 4];
-		regs[id].bytes.byte_4 = memory[PC + 5];
+		regs[id].bytes.byte_1.byte = memory[PC + 2];
+		regs[id].bytes.byte_2.byte = memory[PC + 3];
+		regs[id].bytes.byte_3.byte = memory[PC + 4];
+		regs[id].bytes.byte_4.byte = memory[PC + 5];
 
 		if(DEBUG) {
 			printInstruction_6("irmovl", 0x30, id, b.nibbles.upper, regs[id]);
@@ -247,7 +247,7 @@ void rrmovl(int PC, mtype *memory, Register *regs) {
 	idS = b.nibbles.upper;
 
 	//move contents of source register into destination register
-	regs[idD].reg = regs[idS].reg;
+	regs[idD].dword = regs[idS].dword;
 	if(DEBUG) {
 		printf("rrmovl: 20 %d%d\n", idS,idD);
 	}
@@ -268,18 +268,18 @@ void rmmovl(int PC, mtype *memory, Register *regs) {
 	b.byte = memory[PC + 1];
 	idS = b.nibbles.upper;
 	idB = b.nibbles.lower;
-	offset.bytes.byte_1 = memory[PC + 2];
-	offset.bytes.byte_2 = memory[PC + 3];
-	offset.bytes.byte_3 = memory[PC + 4];
-	offset.bytes.byte_4 = memory[PC + 5];
-	address = regs[idB].reg + offset.reg;
+	offset.bytes.byte_1.byte = memory[PC + 2];
+	offset.bytes.byte_2.byte = memory[PC + 3];
+	offset.bytes.byte_3.byte = memory[PC + 4];
+	offset.bytes.byte_4.byte = memory[PC + 5];
+	address = regs[idB].dword + offset.dword;
 
 	//write source register to memory if within memory bounds
-	if(address + 3 < regs[4].reg) {
-		memory[address] = regs[idS].bytes.byte_1;
-		memory[address + 1] = regs[idS].bytes.byte_2;
-		memory[address + 2] = regs[idS].bytes.byte_3;
-		memory[address + 3] = regs[idS].bytes.byte_4;
+	if(address + 3 < regs[4].dword) {
+		memory[address] = regs[idS].bytes.byte_1.byte;
+		memory[address + 1] = regs[idS].bytes.byte_2.byte;
+		memory[address + 2] = regs[idS].bytes.byte_3.byte;
+		memory[address + 3] = regs[idS].bytes.byte_4.byte;
 		if(DEBUG) {
 			printInstruction_6("rmmovl", 0x40, idS, idB, offset);
 		}
@@ -305,18 +305,18 @@ void mrmovl(int PC, mtype *memory, Register *regs) {
 	b.byte = memory[PC + 1];
 	idB = b.nibbles.lower;
 	idD = b.nibbles.upper;
-	offset.bytes.byte_1 = memory[PC + 2];
-	offset.bytes.byte_2 = memory[PC + 3];
-	offset.bytes.byte_3 = memory[PC + 4];
-	offset.bytes.byte_4 = memory[PC + 5];
-	address = offset.reg + regs[idB].reg;
+	offset.bytes.byte_1.byte = memory[PC + 2];
+	offset.bytes.byte_2.byte = memory[PC + 3];
+	offset.bytes.byte_3.byte = memory[PC + 4];
+	offset.bytes.byte_4.byte = memory[PC + 5];
+	address = offset.dword + regs[idB].dword;
 
 	//Load contents of memory address into destination register
-	if(address + 3 < regs[4].reg) {
-		regs[idD].bytes.byte_1 = memory[address];
-		regs[idD].bytes.byte_2 = memory[address + 1];
-		regs[idD].bytes.byte_3 = memory[address + 2];
-		regs[idD].bytes.byte_4 = memory[address + 3];
+	if(address + 3 < regs[4].dword) {
+		regs[idD].bytes.byte_1.byte = memory[address];
+		regs[idD].bytes.byte_2.byte = memory[address + 1];
+		regs[idD].bytes.byte_3.byte = memory[address + 2];
+		regs[idD].bytes.byte_4.byte = memory[address + 3];
 		if(DEBUG) {
 			printInstruction_6("mrmovl", 0x50, idB, idD, offset);
 		}
@@ -327,5 +327,5 @@ void mrmovl(int PC, mtype *memory, Register *regs) {
 
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
 	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibl, nibu,
-			r.bytes.byte_1, r.bytes.byte_2, r.bytes.byte_3, r.bytes.byte_4);
+			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
 }
