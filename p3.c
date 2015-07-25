@@ -79,6 +79,7 @@ void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
 void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
 void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
+void addl(int PC, mtype *memory, Register *regs, ConditionCodes *cc); //registerA + registerB --> registerB
 
 int main(int argc, char *argv[]) {
 
@@ -99,34 +100,31 @@ int main(int argc, char *argv[]) {
 
 	/* setup input */
 
+
 	i = 0;
 
-	//irmovl register 0 <--- 0x 00 00 00 05
+
+	//irmovl register 0 <--- 0x 0f ff ff ff
 	memory[i++] = 0x30;
 	memory[i++] = 0x80;
 	//value
-	memory[i++] = 0x05;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
+	memory[i++] = 0xff;
+	memory[i++] = 0xff;
+	memory[i++] = 0xff;
+	memory[i++] = 0xff;
 
-	//rmmovl register 0 -> 0xfe(register 1)
-	memory[i++] = 0x40;
+	//irmovl register 0 <--- 0x f0 00 00 00
+	memory[i++] = 0x30;
+	memory[i++] = 0x81;
+	//value
+	memory[i++] = 0xff;
+	memory[i++] = 0xff;
+	memory[i++] = 0xff;
+	memory[i++] = 0xf0;
+
+	//addl register 0 + register 1 -> register 1
+	memory[i++] = 0x60;
 	memory[i++] = 0x01;
-	//value
-	memory[i++] = 0xff;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-
-	//mmrovl register 1 <--- 0xfe(register 1)
-	memory[i++] = 0x50;
-	memory[i++] = 0x12;
-	//value
-	memory[i++] = 0xff;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
 
 	//halt
 	memory[i++] = 0x00;
@@ -175,6 +173,10 @@ int main(int argc, char *argv[]) {
 			instructionLength = 6;
 			mrmovl(PC, memory, regs);
 			break;
+		case 0x60:
+			instructionLength = 2;
+			addl(PC, memory, regs, &cc);
+			break;
 		default: 					//error
 			printf("Something didn't work\n");
 			/* no break */
@@ -187,6 +189,7 @@ int main(int argc, char *argv[]) {
 						regs[i].bytes.byte_4.byte, regs[i].bytes.byte_3.byte,
 						regs[i].bytes.byte_2.byte, regs[i].bytes.byte_1.byte);
 			}
+			printf("condition codes: of = %d, zf = %d, sf = %d\n", cc.of, cc.zf, cc.sf);
 			printf("===End Contents===\n\n");
 		}
 
@@ -281,7 +284,7 @@ void rmmovl(int PC, mtype *memory, Register *regs) {
 		memory[address + 2] = regs[idS].bytes.byte_3.byte;
 		memory[address + 3] = regs[idS].bytes.byte_4.byte;
 		if(DEBUG) {
-			printInstruction_6("rmmovl", 0x40, idS, idB, offset);
+			printInstruction_6("rmmovl", 0x40, idB, idS, offset);
 		}
 	} else {
 		printf("Writing to out of bounds memory address");
@@ -325,7 +328,46 @@ void mrmovl(int PC, mtype *memory, Register *regs) {
 	}
 }
 
+void addl(int PC, mtype *memory, Register *regs, ConditionCodes *cc) {
+	/*
+	 * Byte offsets:
+	 * 	1: [register A, register B]
+	 */
+	Byte b;
+	int idB; //register B
+	int idA; //register A
+	int A; //value of register a
+	int B; //value of register b
+	int sum; //sum of register B and A
+
+	/* calculate the sum */
+	b.byte = memory[PC + 1];
+	idB = b.nibbles.lower;
+	idA = b.nibbles.upper;
+	A = regs[idA].dword;
+	B = regs[idB].dword;
+	sum = A + B;
+	regs[idB].dword = sum;
+
+	/*set condition flags*/
+	//check if result is zero
+	if(sum == 0) {
+		cc -> zf = 1;
+		cc -> sf = 0;
+	} else if (sum < 0) {
+		cc -> sf = 1;
+		cc -> zf = 0;
+	}
+	//check if overflow occurred
+	if((A > 0 && B > 0 && sum < 0) ||
+			(A < 0 && B < 0 && sum > 0)) {
+		cc -> of = 1;
+	} else {
+		cc -> of = 0;
+	}
+}
+
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
-	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibl, nibu,
+	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
 			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
 }
