@@ -5,10 +5,6 @@
  *      Author: jon
  */
 
-/*
- * TASKS
- * 	Need to make sure bit fields are portable
- */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,8 +78,10 @@ void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Regis
 void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
 void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
 void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
+void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
 
 int main(int argc, char *argv[]) {
+
 	/* 32bit program registers */
 	Register eax;
 	Register ecx;
@@ -94,7 +92,7 @@ int main(int argc, char *argv[]) {
 	Register esp; //stack pointer register
 	Register ebp;
 	Register regs[8] = {eax, ecx, edx, ebx, esp, ebp, esi, edi};
-	int i, PC; //program counter, points to next instruction in memory
+	int i, halted, PC; //program counter, points to next instruction in memory
 	int instructionLength; //number of bytes that make up an instruction
 	ConditionCodes cc;
 	mtype *memory = calloc(MEMORYSIZE, sizeof(mtype)); //Main memory for y86
@@ -102,49 +100,30 @@ int main(int argc, char *argv[]) {
 	/* setup input */
 
 	i = 0;
-	//nop
-	memory[i++] = 0x10;
 
-	//irmovl register 0 <--- 0x20010403
+	//irmovl register 0 <--- 0x 00 00 00 05
 	memory[i++] = 0x30;
 	memory[i++] = 0x80;
 	//value
-	memory[i++] = 0x03;
-	memory[i++] = 0x04;
-	memory[i++] = 0x01;
-	memory[i++] = 0x20;
-
-	//rrmovl register 0 -> register 3
-	memory[i++] = 0x20;
-	memory[i++] = 0x03;
-
-	//irmovl register 3 <--- 0x11220000
-	memory[i++] = 0x30;
-	memory[i++] = 0x82;
-	//value
-	memory[i++] = 0xcd;
-	memory[i++] = 0xab;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-
-	//rrmovl register 3 -> register 6
-	memory[i++] = 0x20;
-	memory[i++] = 0x36;
-
-	//irmovl register 1 <--- 0x00000030
-	memory[i++] = 0x30;
-	memory[i++] = 0x81;
-	//value
-	memory[i++] = 0x30;
+	memory[i++] = 0x05;
 	memory[i++] = 0x00;
 	memory[i++] = 0x00;
 	memory[i++] = 0x00;
 
-	//rmmovl register 0 -> 0x03(register 1)
+	//rmmovl register 0 -> 0xfe(register 1)
 	memory[i++] = 0x40;
 	memory[i++] = 0x01;
 	//value
-	memory[i++] = 0x03;
+	memory[i++] = 0xff;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+
+	//mmrovl register 1 <--- 0xfe(register 1)
+	memory[i++] = 0x50;
+	memory[i++] = 0x12;
+	//value
+	memory[i++] = 0xff;
 	memory[i++] = 0x00;
 	memory[i++] = 0x00;
 	memory[i++] = 0x00;
@@ -161,55 +140,40 @@ int main(int argc, char *argv[]) {
 		regs[i].reg = 0;
 	}
 	regs[4].reg = MEMORYSIZE - 1;
-
+	halted = 0;
 	/* fetch, decode, execute - loop*/
-	while(1) {
+	while(!halted) {
 		/* Fetch && Decode */
 
 		//Read in first byte
 		switch(memory[PC]) {
-
 		case 0x00: 					//halt instruction
 			if(DEBUG) {
 				printf("HALT\n");
 			}
-			return EXIT_SUCCESS;
-
+			halted = 1;
+			break;
 		case 0x10: 					//nop instruction
-
 			if(DEBUG) {
 				printf("NOP\n");
 			}
 			instructionLength = 1;
 			break;
-
 		case 0x20:					//rrmovl - Register -> Register
-			/*
-			 * Byte offsets
-			 * 	1: [source register id, destination register id]
-			 */
 			instructionLength = 2;
 			rrmovl(PC, memory, regs);
 			break;
-
 		case 0x30:					//irmovl - immediate -> Register
-			/*
-			 * Byte offsets
-			 * 	1: [0x8, register to store value]
-			 * 	2 - 5: [value]
-			 */
 			instructionLength = 6;
 			irmovl(PC, memory, regs);
 			break;
-
-		case 0x40:
-			/*
-			 * Byte offsets
-			 *  1: [source register, base register]
-			 *  2-5: [value of offset]
-			 */
+		case 0x40:					//rmmovl - register -> memory(offset(base register))
 			instructionLength = 6;
 			rmmovl(PC, memory, regs);
+			break;
+		case 0x50:					//mrmovl - register <--- memory(offset(base register))
+			instructionLength = 6;
+			mrmovl(PC, memory, regs);
 			break;
 		default: 					//error
 			printf("Something didn't work\n");
@@ -219,11 +183,9 @@ int main(int argc, char *argv[]) {
 		if(DEBUG) {
 			printf("===Contents of Registers in HEX===\n");
 			for(i=0;i < 8; ++i) {
-
 				printf("register id: %d,  %2x %2x %2x %2x\n", i,
 						regs[i].bytes.byte_4, regs[i].bytes.byte_3,
 						regs[i].bytes.byte_2, regs[i].bytes.byte_1);
-
 			}
 			printf("===End Contents===\n\n");
 		}
@@ -232,10 +194,17 @@ int main(int argc, char *argv[]) {
 		PC += instructionLength;
 	}
 
+	free(memory);
 	return EXIT_SUCCESS;
 }
 
 void irmovl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 * 	1: [0x8, register to store value]
+	 * 	2 - 5: [value]
+	 */
+
 	Byte b; //next byte
 	int id; //register id
 
@@ -264,6 +233,10 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 }
 
 void rrmovl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 * 	1: [source register id, destination register id]
+	 */
 	Byte b; //next byte
 	int idS; //source register id;
 	int idD; //destination register id;
@@ -281,6 +254,11 @@ void rrmovl(int PC, mtype *memory, Register *regs) {
 }
 
 void rmmovl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 *  1: [source register, base register]
+	 *  2-5: [value of offset]
+	 */
 	Byte b;
 	int idS; //source register id
 	int idB; //base register id
@@ -308,6 +286,42 @@ void rmmovl(int PC, mtype *memory, Register *regs) {
 	} else {
 		printf("Writing to out of bounds memory address");
 		exit(1);
+	}
+}
+
+void mrmovl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 * 	1: [destination register id, base register id]
+	 * 	2 - 5: [offset value]
+	 */
+	Byte b;
+	int idD; //destination register id
+	int idB; //base register id
+	int address; //address to read from
+	Register offset;
+
+	//Calculate address load from and register id's
+	b.byte = memory[PC + 1];
+	idB = b.nibbles.lower;
+	idD = b.nibbles.upper;
+	offset.bytes.byte_1 = memory[PC + 2];
+	offset.bytes.byte_2 = memory[PC + 3];
+	offset.bytes.byte_3 = memory[PC + 4];
+	offset.bytes.byte_4 = memory[PC + 5];
+	address = offset.reg + regs[idB].reg;
+
+	//Load contents of memory address into destination register
+	if(address + 3 < regs[4].reg) {
+		regs[idD].bytes.byte_1 = memory[address];
+		regs[idD].bytes.byte_2 = memory[address + 1];
+		regs[idD].bytes.byte_3 = memory[address + 2];
+		regs[idD].bytes.byte_4 = memory[address + 3];
+		if(DEBUG) {
+			printInstruction_6("mrmovl", 0x50, idB, idD, offset);
+		}
+	} else {
+		printf("Reading from out of bounds memory address\n");
 	}
 }
 
