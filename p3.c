@@ -4,7 +4,18 @@
  *  Created on: Jul 21, 2015
  *      Author: jon
  */
+
 /*
+ * === Questions ===
+ * Should we ignore the most significant byte on a jmp operation?
+ * 	y86 is only adressible up to 2^32 bytes and jmp operation can use a 2^40 byte address
+ *
+ *How would pushl, popl, call, and ret be represented in ascii if the largest character can only be 7F?
+ *
+ */
+
+ /*
+ * === Notes===
  * Maybe change the name of instructionLength to something about incrementing the pointer
  */
 
@@ -83,7 +94,8 @@ void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
 void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operation); //registerA + registerB --> registerB
 void jmp(int *PC, mtype *memory); //PC = address
-void pushl(int *PC, mtype *memory);
+void pushl(int PC, mtype *memory, Register *regs);  //push double word onto top of stack
+void popl(int PC, mtype *memory, Register *regs);   //pop double word off the top of stack
 
 int main(int argc, char *argv[]) {
 
@@ -99,6 +111,8 @@ int main(int argc, char *argv[]) {
 	Register regs[8] = {eax, ecx, edx, ebx, esp, ebp, esi, edi};
 	int i, halted, PC; //program counter, points to next instruction in memory
 	int instructionLength; //number of bytes that make up an instruction
+	Byte firstByte; //first read in byte
+	int unib;
 	ConditionCodes cc;
 	mtype *memory = calloc(MEMORYSIZE, sizeof(mtype)); //Main memory for y86
 
@@ -106,62 +120,23 @@ int main(int argc, char *argv[]) {
 
 
 	i = 0;
-	int j = 0xf0;
 
-	//irmovl register 5 < --- 0x 00 00 00 04
-	memory[j++] = 0x30;
-	memory[j++] = 0x85;
-	//value
-	memory[j++] = 0x04;
-	memory[j++] = 0x00;
-	memory[j++] = 0x00;
-	memory[j++] = 0x00;
-
-	//jmp PC = 0x 00 00 00 00 16
-	memory[j++] = 0x70;
-	memory[j++] = 0x16;
-	memory[j++] = 0x00;
-	memory[j++] = 0x00;
-	memory[j++] = 0x00;
-	memory[j++] = 0x00;
-
-
-	//jmp address = 0x 00 00 00 00 F0
-	memory[i++] = 0x70;
-	memory[i++] = 0xF0;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-
-
-	//irmovl register 0 <--- 0x 00 00 00 05
+	//irmovl register 0 -> 0x 01 02 03 04
 	memory[i++] = 0x30;
 	memory[i++] = 0x80;
 	//value
-	memory[i++] = 0x05;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-
-	//irmovl register 0 <--- 0x FF FF FF FB
-	memory[i++] = 0x30;
-	memory[i++] = 0x81;
-	//value
-	memory[i++] = 0xFB;
-	memory[i++] = 0xFF;
-	memory[i++] = 0xFF;
-	memory[i++] = 0xFF;
-
-	//addl register 0 + register 1 -> register 1
-	memory[i++] = 0x60;
+	memory[i++] = 0x04;
+	memory[i++] = 0x03;
+	memory[i++] = 0x02;
 	memory[i++] = 0x01;
 
-	//cmovl register 1 -> register 2
-	memory[i++] = 0x25;
-	memory[i++] = 0x12;
+	//pushl register1 -> memory(esp - 4)
+	memory[i++] = 0xA0;
+	memory[i++] = 0x0F;
 
-
+	//popl register 3 <--- memory(esp)
+	memory[i++] = 0XB0;
+	memory[i++] = 0x3F;
 	//halt
 	memory[i++] = 0x00;
 
@@ -180,133 +155,151 @@ int main(int argc, char *argv[]) {
 		/* Fetch && Decode */
 
 		//Read in first byte
-		switch(memory[PC]) {
-		case 0x00: 					//halt instruction
-			if(DEBUG) {
-				printf("HALT\n");
-			}
-			halted = 1;
-			break;
-		case 0x10: 					//nop instruction
-			if(DEBUG) {
-				printf("NOP\n");
-			}
-			instructionLength = 1;
-			break;
-		case 0x20:					//rrmovl - Register -> Register unconditional move
-			instructionLength = 2;
-			rrmovl(PC, memory, regs);
-			break;
-		case 0x21:					//cmovle - Register -> Register when less or equal
-			instructionLength = 2;
-			if(cc.zf || cc.sf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x22:					//cmovl - Register -> Register when less
-			instructionLength = 2;
-			if(cc.sf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x23:					//cmove - Register -> Register when equal
-			instructionLength = 2;
-			if(cc.zf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x24:					//cmovne - Register -> Register when not equal
-			instructionLength = 2;
-			if(!cc.zf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x25:					//cmovge - Register -> Register when greater or equal
-			instructionLength = 2;
-			if(cc.zf || !cc.sf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x26:					//cmovg - Register -> Register when greater
-			instructionLength = 2;
-			if(!cc.sf && !cc.zf) {
-				rrmovl(PC, memory, regs);
-			}
-			break;
-		case 0x30:					//irmovl - immediate -> Register
-			instructionLength = 6;
-			irmovl(PC, memory, regs);
-			break;
-		case 0x40:					//rmmovl - register -> memory(offset(base register))
-			instructionLength = 6;
-			rmmovl(PC, memory, regs);
-			break;
-		case 0x50:					//mrmovl - register <--- memory(offset(base register))
-			instructionLength = 6;
-			mrmovl(PC, memory, regs);
-			break;
-		case 0x60:					//addl - register A + register B -> register B
-			instructionLength = 2;
-			OPl(PC, memory, regs, &cc, '+');
-			break;
-		case 0x61:					//subl - register A - register B -> register B
-			instructionLength = 2;
-			OPl(PC, memory, regs, &cc, '-');
-			break;
-		case 0x62:					//andl - register A & register B -> register B
-			instructionLength = 2;
-			OPl(PC, memory, regs, &cc, '&');
-			break;
-		case 0x63:					//xorl - register A xor register B -> register B
-			instructionLength = 2;
-			OPl(PC, memory, regs, &cc, '^');
-			break;
-		case 0x70:					//jmp - PC = address
-			instructionLength = 0;
-			jmp(&PC, memory);
-			break;
-		case 0x71:					//jle - PC = address when less or equal
-			instructionLength = 0;
-			if(cc.sf || cc.zf) {
-				jmp(&PC, memory);
-			}
-			break;
-		case 0x72:					//jl - PC = address when less
-			instructionLength = 0;
-			if(cc.sf) {
-				jmp(&PC, memory);
-			}
-			break;
-		case 0x73:					//je - PC = address when equal
-			instructionLength = 0;
-			if(cc.zf) {
-				jmp(&PC, memory);
-			}
-			break;
-		case 0x74:					//jne - PC = address when not equal
-			instructionLength = 0;
-			if(!cc.zf) {
-				jmp(&PC, memory);
-			}
-			break;
-		case 0x75:					//jge - PC = address when greater or equal
-			instructionLength = 0;
-			if(cc.zf || !cc.sf) {
-				jmp(&PC, memory);
-			}
-			break;
-		case 0x76:					//jg - PC = address when greater
-			instructionLength = 0;
-			if(!cc.zf && !cc.sf) {
-				jmp(&PC, memory);
-			}
-			break;
-		default: 					//error
-			printf("Something didn't work\n");
-			exit(1);
-			/* no break */
-		}
+		firstByte.byte = memory[PC];
+		unib = firstByte.nibbles.upper;
 
+		/* These instruction are not within the switch case range */
+		if(unib == 0xA) {			//pushl instruction
+			instructionLength = 2;
+			pushl(PC, memory, regs);
+		} else if (unib == 0xB) {	//popl instruction
+			instructionLength = 2;
+			popl(PC, memory, regs);
+		} else if (unib == 0x8) { 	//call instruction
+
+		} else if (unib == 0x9) { 	//return instruction
+
+		}
+		else {
+
+			/* These instruction are within the switch case range */
+			switch(firstByte.byte) {
+			case 0x00: 					//halt instruction
+				if(DEBUG) {
+					printf("HALT\n");
+				}
+				halted = 1;
+				break;
+			case 0x10: 					//nop instruction
+				if(DEBUG) {
+					printf("NOP\n");
+				}
+				instructionLength = 1;
+				break;
+			case 0x20:					//rrmovl - Register -> Register unconditional move
+				instructionLength = 2;
+				rrmovl(PC, memory, regs);
+				break;
+			case 0x21:					//cmovle - Register -> Register when less or equal
+				instructionLength = 2;
+				if(cc.zf || cc.sf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x22:					//cmovl - Register -> Register when less
+				instructionLength = 2;
+				if(cc.sf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x23:					//cmove - Register -> Register when equal
+				instructionLength = 2;
+				if(cc.zf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x24:					//cmovne - Register -> Register when not equal
+				instructionLength = 2;
+				if(!cc.zf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x25:					//cmovge - Register -> Register when greater or equal
+				instructionLength = 2;
+				if(cc.zf || !cc.sf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x26:					//cmovg - Register -> Register when greater
+				instructionLength = 2;
+				if(!cc.sf && !cc.zf) {
+					rrmovl(PC, memory, regs);
+				}
+				break;
+			case 0x30:					//irmovl - immediate -> Register
+				instructionLength = 6;
+				irmovl(PC, memory, regs);
+				break;
+			case 0x40:					//rmmovl - register -> memory(offset(base register))
+				instructionLength = 6;
+				rmmovl(PC, memory, regs);
+				break;
+			case 0x50:					//mrmovl - register <--- memory(offset(base register))
+				instructionLength = 6;
+				mrmovl(PC, memory, regs);
+				break;
+			case 0x60:					//addl - register A + register B -> register B
+				instructionLength = 2;
+				OPl(PC, memory, regs, &cc, '+');
+				break;
+			case 0x61:					//subl - register A - register B -> register B
+				instructionLength = 2;
+				OPl(PC, memory, regs, &cc, '-');
+				break;
+			case 0x62:					//andl - register A & register B -> register B
+				instructionLength = 2;
+				OPl(PC, memory, regs, &cc, '&');
+				break;
+			case 0x63:					//xorl - register A xor register B -> register B
+				instructionLength = 2;
+				OPl(PC, memory, regs, &cc, '^');
+				break;
+			case 0x70:					//jmp - PC = address
+				instructionLength = 0;
+				jmp(&PC, memory);
+				break;
+			case 0x71:					//jle - PC = address when less or equal
+				instructionLength = 0;
+				if(cc.sf || cc.zf) {
+					jmp(&PC, memory);
+				}
+				break;
+			case 0x72:					//jl - PC = address when less
+				instructionLength = 0;
+				if(cc.sf) {
+					jmp(&PC, memory);
+				}
+				break;
+			case 0x73:					//je - PC = address when equal
+				instructionLength = 0;
+				if(cc.zf) {
+					jmp(&PC, memory);
+				}
+				break;
+			case 0x74:					//jne - PC = address when not equal
+				instructionLength = 0;
+				if(!cc.zf) {
+					jmp(&PC, memory);
+				}
+				break;
+			case 0x75:					//jge - PC = address when greater or equal
+				instructionLength = 0;
+				if(cc.zf || !cc.sf) {
+					jmp(&PC, memory);
+				}
+				break;
+			case 0x76:					//jg - PC = address when greater
+				instructionLength = 0;
+				if(!cc.zf && !cc.sf) {
+					jmp(&PC, memory);
+				}
+				break;
+			default: 					//error
+				printf("Something didn't work\n");
+				exit(1);
+				/* no break */
+			}
+		}
 		if(DEBUG) {
 			printf("===Contents of Registers in HEX===\n");
 			for(i=0;i < 8; ++i) {
@@ -482,6 +475,7 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 			result = A + B;
 			debug = "subl: 61";
 		}
+
 		/* check if overflow occurred */
 		if((A > 0 && B > 0 && result < 0) ||
 				(A < 0 && B < 0 && result > 0)) {
@@ -534,6 +528,62 @@ void jmp(int *PC, mtype *memory) {
 	}
 
 }
+
+void pushl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 * 	1:[the register id of the register who's contents need to be pushed onto the stack, dummy register]
+	 */
+	Byte b;
+	int id; //register id
+	b.byte = memory[PC + 1];
+	id = b.nibbles.upper;
+
+	//reduce stack pointer by 4 and push contents of register onto stack
+	int sp = regs[4].dword;
+	if(sp - 4 >= 0) {
+		memory[sp - 4] = regs[id].bytes.byte_1.byte;
+		memory[sp - 3] = regs[id].bytes.byte_2.byte;
+		memory[sp - 2] = regs[id].bytes.byte_3.byte;
+		memory[sp - 1] = regs[id].bytes.byte_4.byte;
+		regs[4].dword -= 4;
+	} else {
+		printf("pushing out of bounds!");
+	}
+
+	if(DEBUG) {
+		printf("pushl: A0 %2x\n", b.byte);
+	}
+}
+
+void popl(int PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets
+	 * 	1: [the register to place value that is poped off the stack, dummy register]
+	 */
+	Byte b;
+	int id; //register id
+	b.byte = memory[PC + 1];
+	id = b.nibbles.upper;
+
+	//pop value of stack into register and increment stack pointer by four
+	int sp = regs[4].dword;
+	if(sp + 4 < MEMORYSIZE) {
+		regs[id].bytes.byte_1.byte = memory[sp];
+		regs[id].bytes.byte_2.byte = memory[sp + 1];
+		regs[id].bytes.byte_3.byte = memory[sp + 2];
+		regs[id].bytes.byte_4.byte = memory[sp + 3];
+		regs[4].dword += 4;
+	} else {
+		printf("poping out of bounds!");
+		exit(1);
+	}
+
+	if(DEBUG) {
+		printf("popl: B0 %2x\n", b.byte);
+	}
+}
+
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
 	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
 			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
