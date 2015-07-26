@@ -4,7 +4,9 @@
  *  Created on: Jul 21, 2015
  *      Author: jon
  */
-
+/*
+ * Maybe change the name of instructionLength to something about incrementing the pointer
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +83,7 @@ void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
 void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operation); //registerA + registerB --> registerB
 void jmp(int *PC, mtype *memory); //PC = address
+void pushl(int *PC, mtype *memory);
 
 int main(int argc, char *argv[]) {
 
@@ -103,6 +106,33 @@ int main(int argc, char *argv[]) {
 
 
 	i = 0;
+	int j = 0xf0;
+
+	//irmovl register 5 < --- 0x 00 00 00 04
+	memory[j++] = 0x30;
+	memory[j++] = 0x85;
+	//value
+	memory[j++] = 0x04;
+	memory[j++] = 0x00;
+	memory[j++] = 0x00;
+	memory[j++] = 0x00;
+
+	//jmp PC = 0x 00 00 00 00 16
+	memory[j++] = 0x70;
+	memory[j++] = 0x16;
+	memory[j++] = 0x00;
+	memory[j++] = 0x00;
+	memory[j++] = 0x00;
+	memory[j++] = 0x00;
+
+
+	//jmp address = 0x 00 00 00 00 F0
+	memory[i++] = 0x70;
+	memory[i++] = 0xF0;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
 
 
 	//irmovl register 0 <--- 0x 00 00 00 05
@@ -130,6 +160,7 @@ int main(int argc, char *argv[]) {
 	//cmovl register 1 -> register 2
 	memory[i++] = 0x25;
 	memory[i++] = 0x12;
+
 
 	//halt
 	memory[i++] = 0x00;
@@ -231,41 +262,41 @@ int main(int argc, char *argv[]) {
 			OPl(PC, memory, regs, &cc, '^');
 			break;
 		case 0x70:					//jmp - PC = address
-			instructionLength = 6;
+			instructionLength = 0;
 			jmp(&PC, memory);
 			break;
 		case 0x71:					//jle - PC = address when less or equal
-			instructionLength = 6;
+			instructionLength = 0;
 			if(cc.sf || cc.zf) {
 				jmp(&PC, memory);
 			}
 			break;
 		case 0x72:					//jl - PC = address when less
-			instructionLength = 6;
+			instructionLength = 0;
 			if(cc.sf) {
 				jmp(&PC, memory);
 			}
 			break;
 		case 0x73:					//je - PC = address when equal
-			instructionLength = 6;
+			instructionLength = 0;
 			if(cc.zf) {
 				jmp(&PC, memory);
 			}
 			break;
 		case 0x74:					//jne - PC = address when not equal
-			instructionLength = 6;
+			instructionLength = 0;
 			if(!cc.zf) {
 				jmp(&PC, memory);
 			}
 			break;
 		case 0x75:					//jge - PC = address when greater or equal
-			instructionLength = 6;
+			instructionLength = 0;
 			if(cc.zf || !cc.sf) {
 				jmp(&PC, memory);
 			}
 			break;
 		case 0x76:					//jg - PC = address when greater
-			instructionLength = 6;
+			instructionLength = 0;
 			if(!cc.zf && !cc.sf) {
 				jmp(&PC, memory);
 			}
@@ -485,15 +516,18 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 void jmp(int *PC, mtype *memory) {
 	/*
 	 * Byte offsets
-	 * 	1 - 5: [address to jump to], but y86 address space can only contain 2^32 bytes so ignore the first byte
+	 * 	1 - 5: [address to jump to], but y86 address space can only contain 2^32 bytes so ignore the last byte
 	 */
 	Register address;
-	address.bytes.byte_1.byte = memory[*PC + 2];
-	address.bytes.byte_2.byte = memory[*PC + 3];
-	address.bytes.byte_3.byte = memory[*PC + 4];
-	address.bytes.byte_4.byte = memory[*PC + 5];
+	address.bytes.byte_1.byte = memory[*PC + 1];
+	address.bytes.byte_2.byte = memory[*PC + 2];
+	address.bytes.byte_3.byte = memory[*PC + 3];
+	address.bytes.byte_4.byte = memory[*PC + 4];
 	if(address.dword < MEMORYSIZE) {
 		*PC = address.dword;
+		if(DEBUG) {
+			printInstruction_6("jmp", 0x70, 8, 8, address);
+		}
 	} else {
 		printf("Jumping out of bounds");
 		exit(1);
