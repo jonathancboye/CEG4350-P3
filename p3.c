@@ -79,7 +79,7 @@ void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
 void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
 void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
-void addl(int PC, mtype *memory, Register *regs, ConditionCodes *cc); //registerA + registerB --> registerB
+void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operation); //registerA + registerB --> registerB
 
 int main(int argc, char *argv[]) {
 
@@ -104,26 +104,26 @@ int main(int argc, char *argv[]) {
 	i = 0;
 
 
-	//irmovl register 0 <--- 0x 0f ff ff ff
+	//irmovl register 0 <--- 0x
 	memory[i++] = 0x30;
 	memory[i++] = 0x80;
 	//value
-	memory[i++] = 0xff;
-	memory[i++] = 0xff;
-	memory[i++] = 0xff;
-	memory[i++] = 0xff;
+	memory[i++] = 0x05;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
 
 	//irmovl register 0 <--- 0x f0 00 00 00
 	memory[i++] = 0x30;
 	memory[i++] = 0x81;
 	//value
-	memory[i++] = 0xff;
-	memory[i++] = 0xff;
-	memory[i++] = 0xff;
-	memory[i++] = 0xf0;
+	memory[i++] = 0x0a;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
 
 	//addl register 0 + register 1 -> register 1
-	memory[i++] = 0x60;
+	memory[i++] = 0x63;
 	memory[i++] = 0x01;
 
 	//halt
@@ -175,7 +175,19 @@ int main(int argc, char *argv[]) {
 			break;
 		case 0x60:
 			instructionLength = 2;
-			addl(PC, memory, regs, &cc);
+			OPl(PC, memory, regs, &cc, '+');
+			break;
+		case 0x61:
+			instructionLength = 2;
+			OPl(PC, memory, regs, &cc, '-');
+			break;
+		case 0x62:
+			instructionLength = 2;
+			OPl(PC, memory, regs, &cc, '&');
+			break;
+		case 0x63:
+			instructionLength = 2;
+			OPl(PC, memory, regs, &cc, '^');
 			break;
 		default: 					//error
 			printf("Something didn't work\n");
@@ -222,8 +234,8 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		//move next 4 bytes into register
 		regs[id].bytes.byte_1.byte = memory[PC + 2];
 		regs[id].bytes.byte_2.byte = memory[PC + 3];
-		regs[id].bytes.byte_3.byte = memory[PC + 4];
 		regs[id].bytes.byte_4.byte = memory[PC + 5];
+		regs[id].bytes.byte_3.byte = memory[PC + 4];
 
 		if(DEBUG) {
 			printInstruction_6("irmovl", 0x30, id, b.nibbles.upper, regs[id]);
@@ -328,7 +340,7 @@ void mrmovl(int PC, mtype *memory, Register *regs) {
 	}
 }
 
-void addl(int PC, mtype *memory, Register *regs, ConditionCodes *cc) {
+void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operation) {
 	/*
 	 * Byte offsets:
 	 * 	1: [register A, register B]
@@ -336,35 +348,56 @@ void addl(int PC, mtype *memory, Register *regs, ConditionCodes *cc) {
 	Byte b;
 	int idB; //register B
 	int idA; //register A
-	int A; //value of register a
-	int B; //value of register b
-	int sum; //sum of register B and A
+	int A; //value of register A
+	int B; //value of register B
+	int result; //sum of register B and A
+	char *debug;
 
-	/* calculate the sum */
+	/* calculate the result */
 	b.byte = memory[PC + 1];
 	idB = b.nibbles.lower;
 	idA = b.nibbles.upper;
 	A = regs[idA].dword;
 	B = regs[idB].dword;
-	sum = A + B;
-	regs[idB].dword = sum;
+	if(operation == '+' || operation == '-') {
+
+		if(operation == '+') {
+			result = A + B;
+			debug = "addl: 60";
+		} else {
+			B = -B; //flip sign so we can check turn it in to addition to check for overflow
+			result = A + B;
+			debug = "subl: 61";
+		}
+		/* check if overflow occurred */
+		if((A > 0 && B > 0 && result < 0) ||
+				(A < 0 && B < 0 && result > 0)) {
+			cc -> of = 1;
+		} else {
+			cc -> of = 0;
+		}
+
+	} else if(operation == '&') {
+		result = A & B;
+		debug = "andl: 62";
+	} else if(operation == '^') {
+		result = A ^ B;
+		debug = "xorl: 63";
+	}
+	regs[idB].dword = result;
 
 	/*set condition flags*/
-	//check if result is zero
-	if(sum == 0) {
+	if(result == 0) {
 		cc -> zf = 1;
 		cc -> sf = 0;
-	} else if (sum < 0) {
+	} else if (result < 0) {
 		cc -> sf = 1;
 		cc -> zf = 0;
 	}
-	//check if overflow occurred
-	if((A > 0 && B > 0 && sum < 0) ||
-			(A < 0 && B < 0 && sum > 0)) {
-		cc -> of = 1;
-	} else {
-		cc -> of = 0;
-	}
+
+	if(DEBUG) {
+			printf("%s %d%d\n", debug, idA, idB);
+		}
 }
 
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
