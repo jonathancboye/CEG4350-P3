@@ -157,9 +157,45 @@ int main(int argc, char *argv[]) {
 			}
 			instructionLength = 1;
 			break;
-		case 0x20:					//rrmovl - Register -> Register
+		case 0x20:					//rrmovl - Register -> Register unconditional move
 			instructionLength = 2;
 			rrmovl(PC, memory, regs);
+			break;
+		case 0x21:					//cmovle - Register -> Register when less or equal
+			instructionLength = 2;
+			if(cc.zf || cc.sf) {
+				rrmovl(PC, memory, regs);
+			}
+			break;
+		case 0x22:					//cmovl - Register -> Register when less
+			instructionLength = 2;
+			if(cc.sf) {
+				rrmovl(PC, memory, regs);
+			}
+			break;
+		case 0x23:					//cmove - Register -> Register when equal
+			instructionLength = 2;
+			if(cc.zf) {
+				rrmovl(PC, memory, regs);
+			}
+			break;
+		case 0x24:					//cmovne - Register -> Register when not equal
+			instructionLength = 2;
+			if(!cc.zf) {
+				rrmovl(PC, memory, regs);
+			}
+			break;
+		case 0x25:					//cmovge - Register -> Register when greater or equal
+			instructionLength = 2;
+			if(cc.zf || !cc.sf) {
+				rrmovl(PC, memory, regs);
+			}
+			break;
+		case 0x26:					//cmovg - Register -> Register when greater
+			instructionLength = 2;
+			if(!cc.sf && !cc.zf) {
+				rrmovl(PC, memory, regs);
+			}
 			break;
 		case 0x30:					//irmovl - immediate -> Register
 			instructionLength = 6;
@@ -189,6 +225,8 @@ int main(int argc, char *argv[]) {
 			instructionLength = 2;
 			OPl(PC, memory, regs, &cc, '^');
 			break;
+
+
 		default: 					//error
 			printf("Something didn't work\n");
 			/* no break */
@@ -396,8 +434,8 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 	}
 
 	if(DEBUG) {
-			printf("%s %d%d\n", debug, idA, idB);
-		}
+		printf("%s %d%d\n", debug, idA, idB);
+	}
 }
 
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
