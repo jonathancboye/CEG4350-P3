@@ -80,6 +80,7 @@ void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
 void rmmovl(int PC, mtype *memory, Register *regs); //register -> memory
 void mrmovl(int PC, mtype *memory, Register *regs); //register <--- memory(offset(base register))
 void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operation); //registerA + registerB --> registerB
+void jmp(int *PC, mtype *memory); //PC = address
 
 int main(int argc, char *argv[]) {
 
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
 	i = 0;
 
 
-	//irmovl register 0 <--- 0x
+	//irmovl register 0 <--- 0x 00 00 00 05
 	memory[i++] = 0x30;
 	memory[i++] = 0x80;
 	//value
@@ -113,18 +114,22 @@ int main(int argc, char *argv[]) {
 	memory[i++] = 0x00;
 	memory[i++] = 0x00;
 
-	//irmovl register 0 <--- 0x f0 00 00 00
+	//irmovl register 0 <--- 0x FF FF FF FB
 	memory[i++] = 0x30;
 	memory[i++] = 0x81;
 	//value
-	memory[i++] = 0x0a;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
+	memory[i++] = 0xFB;
+	memory[i++] = 0xFF;
+	memory[i++] = 0xFF;
+	memory[i++] = 0xFF;
 
 	//addl register 0 + register 1 -> register 1
-	memory[i++] = 0x63;
+	memory[i++] = 0x60;
 	memory[i++] = 0x01;
+
+	//cmovl register 1 -> register 2
+	memory[i++] = 0x25;
+	memory[i++] = 0x12;
 
 	//halt
 	memory[i++] = 0x00;
@@ -209,26 +214,65 @@ int main(int argc, char *argv[]) {
 			instructionLength = 6;
 			mrmovl(PC, memory, regs);
 			break;
-		case 0x60:
+		case 0x60:					//addl - register A + register B -> register B
 			instructionLength = 2;
 			OPl(PC, memory, regs, &cc, '+');
 			break;
-		case 0x61:
+		case 0x61:					//subl - register A - register B -> register B
 			instructionLength = 2;
 			OPl(PC, memory, regs, &cc, '-');
 			break;
-		case 0x62:
+		case 0x62:					//andl - register A & register B -> register B
 			instructionLength = 2;
 			OPl(PC, memory, regs, &cc, '&');
 			break;
-		case 0x63:
+		case 0x63:					//xorl - register A xor register B -> register B
 			instructionLength = 2;
 			OPl(PC, memory, regs, &cc, '^');
 			break;
-
-
+		case 0x70:					//jmp - PC = address
+			instructionLength = 6;
+			jmp(&PC, memory);
+			break;
+		case 0x71:					//jle - PC = address when less or equal
+			instructionLength = 6;
+			if(cc.sf || cc.zf) {
+				jmp(&PC, memory);
+			}
+			break;
+		case 0x72:					//jl - PC = address when less
+			instructionLength = 6;
+			if(cc.sf) {
+				jmp(&PC, memory);
+			}
+			break;
+		case 0x73:					//je - PC = address when equal
+			instructionLength = 6;
+			if(cc.zf) {
+				jmp(&PC, memory);
+			}
+			break;
+		case 0x74:					//jne - PC = address when not equal
+			instructionLength = 6;
+			if(!cc.zf) {
+				jmp(&PC, memory);
+			}
+			break;
+		case 0x75:					//jge - PC = address when greater or equal
+			instructionLength = 6;
+			if(cc.zf || !cc.sf) {
+				jmp(&PC, memory);
+			}
+			break;
+		case 0x76:					//jg - PC = address when greater
+			instructionLength = 6;
+			if(!cc.zf && !cc.sf) {
+				jmp(&PC, memory);
+			}
+			break;
 		default: 					//error
 			printf("Something didn't work\n");
+			exit(1);
 			/* no break */
 		}
 
@@ -438,6 +482,24 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 	}
 }
 
+void jmp(int *PC, mtype *memory) {
+	/*
+	 * Byte offsets
+	 * 	1 - 5: [address to jump to], but y86 address space can only contain 2^32 bytes so ignore the first byte
+	 */
+	Register address;
+	address.bytes.byte_1.byte = memory[*PC + 2];
+	address.bytes.byte_2.byte = memory[*PC + 3];
+	address.bytes.byte_3.byte = memory[*PC + 4];
+	address.bytes.byte_4.byte = memory[*PC + 5];
+	if(address.dword < MEMORYSIZE) {
+		*PC = address.dword;
+	} else {
+		printf("Jumping out of bounds");
+		exit(1);
+	}
+
+}
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
 	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
 			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
