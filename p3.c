@@ -5,28 +5,12 @@
  *      Author: jon
  */
 
-/*
- * === Questions ===
- * Should we ignore the most significant byte on a jmp operation?
- * 	y86 is only adressible up to 2^32 bytes and jmp operation can use a 2^40 byte address
- *
- *How would pushl, popl, call, and ret be represented in ascii if the largest character can only be 7F?
- *
- */
-
- /*
- * === Notes===
- * Maybe change the name of instructionLength to something about incrementing the pointer
- * Clear the bit flags before every arithmic operation
- */
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 
 #define MEMORYSIZE 5000
-#define DEBUG 1 //turn debugging on or off
+#define DEBUG 0 //turn debugging on or off
 
 
 typedef char mtype;
@@ -88,7 +72,9 @@ typedef union {
 }Register;
 
 
-void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r);
+void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r); //prints a 6 byte instruction
+void printInstruction_2(char *instruction, int opcode, int nibl, int nibu); //prints a 2 byte instruction
+void printState(Register *regs, ConditionCodes cc, int PC); //prints state of registers, condition codes, and program counter
 
 void irmovl(int PC, mtype *memory, Register *regs); //immediate -> register
 void rrmovl(int PC, mtype *memory, Register *regs); //register -> register
@@ -124,10 +110,6 @@ int main(int argc, char *argv[]) {
 	/* setup input */
 
 	if(argc != 2) {
-		for(i = 0;i < argc; i++) {
-			printf("argument: %d, %s\n", i, argv[i]);
-		}
-
 		printf("Programs needs a ascii file as input\n");
 		printf("syntax: project3 <fileName>\n");
 		exit(1);
@@ -146,33 +128,6 @@ int main(int argc, char *argv[]) {
 		firstByte.nibbles.lower = asciiToByte(lowerNibble);
 		memory[i++] = firstByte.byte;
 	}
-
-//	i = 0;
-//
-//	//irmovl register 0 <--- 0x 01 02 03 04
-//	memory[i++] = 0x30;
-//	memory[i++] = 0x80;
-//	//value
-//	memory[i++] = 0x04;
-//	memory[i++] = 0x03;
-//	memory[i++] = 0x02;
-//	memory[i++] = 0x01;
-//
-//	//irmovl register 1 <-----0x 10 20 30 40
-//	memory[i++] = 0x30;
-//	memory[i++] = 0x81;
-//	//value
-//	memory[i++] = 0x40;
-//	memory[i++] = 0x30;
-//	memory[i++] = 0x20;
-//	memory[i++] = 0x10;
-//
-//	//addl register 0 + register 1 -> register 1
-//	memory[i++] = 0x60;
-//	memory[i++] = 0x01;
-//
-//	memory[i++] = 0x00;
-
 
 	/* initialize program counter and flags and registers*/
 	PC = 0;
@@ -209,15 +164,11 @@ int main(int argc, char *argv[]) {
 			/* These instruction are within the switch case range */
 			switch(firstByte.byte) {
 			case 0x00: 					//halt instruction
-				if(DEBUG) {
-					printf("HALT\n");
-				}
+				printf("00 00 00 00 00 00 :HALT\n");
 				halted = 1;
 				break;
 			case 0x10: 					//nop instruction
-				if(DEBUG) {
-					printf("NOP\n");
-				}
+				printf("10 00 00 00 00 00 :NOP\n");
 				instructionLength = 1;
 				break;
 			case 0x20:					//rrmovl - Register -> Register unconditional move
@@ -334,21 +285,17 @@ int main(int argc, char *argv[]) {
 				/* no break */
 			}
 		}
+
 		if(DEBUG) {
-			printf("===Contents of Registers in HEX===\n");
-			for(i=0;i < 8; ++i) {
-				printf("register id: %d,  %2x %2x %2x %2x\n", i,
-						regs[i].bytes.byte_4.byte, regs[i].bytes.byte_3.byte,
-						regs[i].bytes.byte_2.byte, regs[i].bytes.byte_1.byte);
-			}
-			printf("condition codes: of = %d, zf = %d, sf = %d\n", cc.of, cc.zf, cc.sf);
-			printf("===End Contents===\n\n");
+			printState(regs, cc, PC);
 		}
+
 
 		/* Update PC */
 		PC += instructionLength;
 	}
 
+	printState(regs, cc, PC);
 	free(memory);
 	return EXIT_SUCCESS;
 }
@@ -377,9 +324,9 @@ void irmovl(int PC, mtype *memory, Register *regs) {
 		regs[id].bytes.byte_4.byte = memory[PC + 5];
 		regs[id].bytes.byte_3.byte = memory[PC + 4];
 
-		if(DEBUG) {
-			printInstruction_6("irmovl", 0x30, id, b.nibbles.upper, regs[id]);
-		}
+
+		printInstruction_6("irmovl", 0x30, id, b.nibbles.upper, regs[id]);
+
 
 	} else {
 		printf("Something is wrong!!\n");
@@ -403,9 +350,9 @@ void rrmovl(int PC, mtype *memory, Register *regs) {
 
 	//move contents of source register into destination register
 	regs[idD].dword = regs[idS].dword;
-	if(DEBUG) {
-		printf("rrmovl: 20 %d%d\n", idS,idD);
-	}
+
+	printInstruction_2("rrmovl", 0x20, idS, idD);
+
 }
 
 void rmmovl(int PC, mtype *memory, Register *regs) {
@@ -435,9 +382,9 @@ void rmmovl(int PC, mtype *memory, Register *regs) {
 		memory[address + 1] = regs[idS].bytes.byte_2.byte;
 		memory[address + 2] = regs[idS].bytes.byte_3.byte;
 		memory[address + 3] = regs[idS].bytes.byte_4.byte;
-		if(DEBUG) {
-			printInstruction_6("rmmovl", 0x40, idB, idS, offset);
-		}
+
+		printInstruction_6("rmmovl", 0x40, idB, idS, offset);
+
 	} else {
 		printf("Writing to out of bounds memory address");
 		exit(1);
@@ -472,9 +419,9 @@ void mrmovl(int PC, mtype *memory, Register *regs) {
 		regs[idD].bytes.byte_2.byte = memory[address + 1];
 		regs[idD].bytes.byte_3.byte = memory[address + 2];
 		regs[idD].bytes.byte_4.byte = memory[address + 3];
-		if(DEBUG) {
-			printInstruction_6("mrmovl", 0x50, idB, idD, offset);
-		}
+
+		printInstruction_6("mrmovl", 0x50, idB, idD, offset);
+
 	} else {
 		printf("Reading from out of bounds memory address\n");
 	}
@@ -491,7 +438,8 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 	int A; //value of register A
 	int B; //value of register B
 	int result; //sum of register B and A
-	char *debug;
+	char *instruction;
+	int opcode;
 
 	/* calculate the result */
 	b.byte = memory[PC + 1];
@@ -503,11 +451,13 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 
 		if(operation == '+') {
 			result = A + B;
-			debug = "addl: 60";
+			instruction = "addl";
+			opcode = 0x60;
 		} else {
 			B = -B; //flip sign so we can check turn it in to addition to check for overflow
 			result = A + B;
-			debug = "subl: 61";
+			instruction = "subl";
+			opcode = 0x61;
 		}
 
 		/* check if overflow occurred */
@@ -520,10 +470,12 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 
 	} else if(operation == '&') {
 		result = A & B;
-		debug = "andl: 62";
+		instruction = "andl";
+		opcode = 0x62;
 	} else if(operation == '^') {
 		result = A ^ B;
-		debug = "xorl: 63";
+		instruction = "xorl";
+		opcode = 0x63;
 	}
 	regs[idB].dword = result;
 
@@ -536,9 +488,9 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 		cc -> zf = 0;
 	}
 
-	if(DEBUG) {
-		printf("%s %d%d\n", debug, idA, idB);
-	}
+
+	printInstruction_2(instruction, opcode, idA, idB);
+
 }
 
 void jmp(int *PC, mtype *memory) {
@@ -584,9 +536,7 @@ void pushl(int PC, mtype *memory, Register *regs) {
 		printf("pushing out of bounds!");
 	}
 
-	if(DEBUG) {
-		printf("pushl: A0 %2x\n", b.byte);
-	}
+	printInstruction_2("pushl", 0xA0, b.nibbles.upper, b.nibbles.lower);
 }
 
 void popl(int PC, mtype *memory, Register *regs) {
@@ -601,7 +551,7 @@ void popl(int PC, mtype *memory, Register *regs) {
 
 	//pop value of stack into register and increment stack pointer by four
 	int sp = regs[4].dword;
-	if(sp + 4 < MEMORYSIZE) {
+	if(sp + 4 <= MEMORYSIZE) {
 		regs[id].bytes.byte_1.byte = memory[sp];
 		regs[id].bytes.byte_2.byte = memory[sp + 1];
 		regs[id].bytes.byte_3.byte = memory[sp + 2];
@@ -611,9 +561,9 @@ void popl(int PC, mtype *memory, Register *regs) {
 		printf("poping out of bounds!\n");
 		exit(1);
 	}
-	if(DEBUG) {
-		printf("popl: B0 %2x\n", b.byte);
-	}
+
+	printInstruction_2("popl", 0xB0, b.nibbles.upper, b.nibbles.upper);
+
 }
 
 void call(int *PC, mtype *memory, Register *regs) {
@@ -649,9 +599,9 @@ void call(int *PC, mtype *memory, Register *regs) {
 		exit(1);
 	}
 
-	if(DEBUG) {
-		printInstruction_6("call",0x80,0xF,0xF, address);
-	}
+
+	printInstruction_6("call",0x80,0xF,0xF, address);
+
 }
 
 void ret(int *PC, mtype *memory, Register *regs) {
@@ -664,9 +614,9 @@ void ret(int *PC, mtype *memory, Register *regs) {
 	regs[4].dword += 4;
 	*PC = address.dword;
 
-	if(DEBUG) {
-		printf("ret: 90\n");
-	}
+
+	printf("ret: 90\n");
+
 }
 
 int asciiToByte(char ascii) {
@@ -736,7 +686,24 @@ int asciiToByte(char ascii) {
 	return retval;
 }
 
+void printState(Register *regs, ConditionCodes cc, int PC) {
+	int i;
+	printf("===Contents of Registers in HEX===\n");
+	for(i=0;i < 8; ++i) {
+		printf("register id: %d,  %2x %2x %2x %2x\n", i,
+				regs[i].bytes.byte_4.byte, regs[i].bytes.byte_3.byte,
+				regs[i].bytes.byte_2.byte, regs[i].bytes.byte_1.byte);
+	}
+	printf("condition codes: of = %d, zf = %d, sf = %d\n", cc.of, cc.zf, cc.sf);
+	printf("Program counter = %d\n", PC);
+	printf("===End Contents===\n\n");
+}
+
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
-	printf("%s: %2x %1x%1x %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
-			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
+	printf("%2x %1x%1x %2x %2x %2x %2x :%s\n", opcode, nibu, nibl,
+			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte, instruction);
+}
+
+void printInstruction_2(char *instruction, int opcode, int nibu, int nibl) {
+	printf("%2x %1x%1x 00 00 00 00 :%s\n", opcode, nibu, nibl, instruction);
 }
