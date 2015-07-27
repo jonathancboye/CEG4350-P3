@@ -96,6 +96,8 @@ void OPl(int PC, mtype *memory, Register *regs, ConditionCodes *cc,char operatio
 void jmp(int *PC, mtype *memory); //PC = address
 void pushl(int PC, mtype *memory, Register *regs);  //push double word onto top of stack
 void popl(int PC, mtype *memory, Register *regs);   //pop double word off the top of stack
+void call(int *PC, mtype *memory, Register *regs);  //push PC onto stack and jmp to destination
+void ret(int *PC, mtype *memory, Register *regs); 	//pop a value from the stack and set it value of PC
 
 int main(int argc, char *argv[]) {
 
@@ -120,23 +122,45 @@ int main(int argc, char *argv[]) {
 
 
 	i = 0;
+	int j = 0x0000000000000100;
 
-	//irmovl register 0 -> 0x 01 02 03 04
-	memory[i++] = 0x30;
-	memory[i++] = 0x80;
+	//irmovl register 0 <--- 0x 01 02 03 04
+	memory[j++] = 0x30;
+	memory[j++] = 0x80;
 	//value
-	memory[i++] = 0x04;
-	memory[i++] = 0x03;
-	memory[i++] = 0x02;
-	memory[i++] = 0x01;
+	memory[j++] = 0x04;
+	memory[j++] = 0x03;
+	memory[j++] = 0x02;
+	memory[j++] = 0x01;
 
 	//pushl register1 -> memory(esp - 4)
-	memory[i++] = 0xA0;
-	memory[i++] = 0x0F;
+	memory[j++] = 0xA0;
+	memory[j++] = 0x0F;
 
 	//popl register 3 <--- memory(esp)
-	memory[i++] = 0XB0;
-	memory[i++] = 0x3F;
+	memory[j++] = 0XB0;
+	memory[j++] = 0x3F;
+
+	//ret
+	memory[j++] = 0x90;
+
+	//call 0x00 00 00 01 00 00
+	memory[i++] = 0x80;
+	memory[i++] = 0x00;
+	memory[i++] = 0x01;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+	memory[i++] = 0x00;
+
+	//irmovl
+	memory[i++] = 0x30;
+	memory[i++] = 0x87;
+	//value
+	memory[i++] = 0x11;
+	memory[i++] = 0x11;
+	memory[i++] = 0x22;
+	memory[i++] = 0x22;
+
 	//halt
 	memory[i++] = 0x00;
 
@@ -148,7 +172,7 @@ int main(int argc, char *argv[]) {
 	for(i=0;i < 8; ++i) {
 		regs[i].dword = 0;
 	}
-	regs[4].dword = MEMORYSIZE - 1;
+	regs[4].dword = MEMORYSIZE;
 	halted = 0;
 	/* fetch, decode, execute - loop*/
 	while(!halted) {
@@ -166,12 +190,12 @@ int main(int argc, char *argv[]) {
 			instructionLength = 2;
 			popl(PC, memory, regs);
 		} else if (unib == 0x8) { 	//call instruction
-
+			instructionLength = 0;
+			call(&PC, memory, regs);
 		} else if (unib == 0x9) { 	//return instruction
-
-		}
-		else {
-
+			instructionLength = 0;
+			ret(&PC, memory, regs);
+		} else {
 			/* These instruction are within the switch case range */
 			switch(firstByte.byte) {
 			case 0x00: 					//halt instruction
@@ -523,10 +547,9 @@ void jmp(int *PC, mtype *memory) {
 			printInstruction_6("jmp", 0x70, 8, 8, address);
 		}
 	} else {
-		printf("Jumping out of bounds");
+		printf("Jumping out of bounds\n");
 		exit(1);
 	}
-
 }
 
 void pushl(int PC, mtype *memory, Register *regs) {
@@ -575,16 +598,67 @@ void popl(int PC, mtype *memory, Register *regs) {
 		regs[id].bytes.byte_4.byte = memory[sp + 3];
 		regs[4].dword += 4;
 	} else {
-		printf("poping out of bounds!");
+		printf("poping out of bounds!\n");
 		exit(1);
 	}
-
 	if(DEBUG) {
 		printf("popl: B0 %2x\n", b.byte);
 	}
 }
 
+void call(int *PC, mtype *memory, Register *regs) {
+	/*
+	 * Byte offsets:
+	 * 	1-6[destination of jmp] can ignore last byte since address is larger than addressable space
+	 */
+	Register address; //address to begin execution at
+	Register returnAddress; //address to return to
+	int sp = regs[4].dword;
+
+	if(sp - 1 >= 0) {
+		//store return address on stack
+		returnAddress.dword =  *PC + 6;
+		memory[sp - 4] = returnAddress.bytes.byte_1.byte;
+		memory[sp - 3] = returnAddress.bytes.byte_2.byte;
+		memory[sp - 2] = returnAddress.bytes.byte_3.byte;
+		memory[sp - 1] = returnAddress.bytes.byte_4.byte;
+		regs[4].dword -= 4;
+
+		//move program counter to address
+		address.bytes.byte_1.byte = memory[*PC + 1];
+		address.bytes.byte_2.byte = memory[*PC + 2];
+		address.bytes.byte_3.byte = memory[*PC + 3];
+		address.bytes.byte_4.byte = memory[*PC + 4];
+		if(address.dword < MEMORYSIZE) {
+			*PC = address.dword;
+		} else {
+			printf("address of call instruction is beyond memory limits\n");
+		}
+	} else {
+		printf("pushing out of bounds!");
+		exit(1);
+	}
+
+	if(DEBUG) {
+		printInstruction_6("call",0x80,0xF,0xF, address);
+	}
+}
+
+void ret(int *PC, mtype *memory, Register *regs) {
+	Register address; //popped value from stack
+	int sp = regs[4].dword;
+	address.bytes.byte_1.byte = memory[sp];
+	address.bytes.byte_2.byte = memory[sp + 1];
+	address.bytes.byte_3.byte = memory[sp + 2];
+	address.bytes.byte_4.byte = memory[sp + 3];
+	regs[4].dword += 4;
+	*PC = address.dword;
+
+	if(DEBUG) {
+		printf("ret: 90\n");
+	}
+}
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
-	printf("%s: %2x %d%d %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
+	printf("%s: %2x %1x%1x %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
 			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
 }
