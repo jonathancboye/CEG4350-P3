@@ -100,7 +100,7 @@ void pushl(int PC, mtype *memory, Register *regs);  //push double word onto top 
 void popl(int PC, mtype *memory, Register *regs);   //pop double word off the top of stack
 void call(int *PC, mtype *memory, Register *regs);  //push PC onto stack and jmp to destination
 void ret(int *PC, mtype *memory, Register *regs); 	//pop a value from the stack and set it value of PC
-int asciiToByte(char ascii);	//Correct's design of project by converting each 2 character ASCII code to a byte
+int asciiToByte(char ascii);	//Correct's design of project by converting each ASCII character to a byte
 
 int main(int argc, char *argv[]) {
 
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 		printf("syntax: project3 <fileName>\n");
 		exit(1);
 	}
-	FILE *fp;
+	FILE *fp = NULL;
 	char *filename = argv[1];
 	char upperNibble, lowerNibble;
 	fp = fopen(filename, "r");
@@ -140,10 +140,10 @@ int main(int argc, char *argv[]) {
 		printf("Could not find file\n");
 		exit(1);
 	}
-	while(fscanf("%c%c", &upperNibble, &lowerNibble) != EOF) {
+	i = 0;
+	while(fscanf(fp,"%c%c", &upperNibble, &lowerNibble) != EOF) {
 		firstByte.nibbles.upper = asciiToByte(upperNibble);
 		firstByte.nibbles.lower = asciiToByte(lowerNibble);
-
 		memory[i++] = firstByte.byte;
 	}
 
