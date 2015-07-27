@@ -17,7 +17,9 @@
  /*
  * === Notes===
  * Maybe change the name of instructionLength to something about incrementing the pointer
+ * Clear the bit flags before every arithmic operation
  */
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,6 +100,7 @@ void pushl(int PC, mtype *memory, Register *regs);  //push double word onto top 
 void popl(int PC, mtype *memory, Register *regs);   //pop double word off the top of stack
 void call(int *PC, mtype *memory, Register *regs);  //push PC onto stack and jmp to destination
 void ret(int *PC, mtype *memory, Register *regs); 	//pop a value from the stack and set it value of PC
+int asciiToByte(char ascii);	//Correct's design of project by converting each 2 character ASCII code to a byte
 
 int main(int argc, char *argv[]) {
 
@@ -120,49 +123,56 @@ int main(int argc, char *argv[]) {
 
 	/* setup input */
 
+	if(argc != 2) {
+		for(i = 0;i < argc; i++) {
+			printf("argument: %d, %s\n", i, argv[i]);
+		}
 
-	i = 0;
-	int j = 0x0000000000000100;
+		printf("Programs needs a ascii file as input\n");
+		printf("syntax: project3 <fileName>\n");
+		exit(1);
+	}
+	FILE *fp;
+	char *filename = argv[1];
+	char upperNibble, lowerNibble;
+	fp = fopen(filename, "r");
+	if(fp == NULL) {
+		printf("Could not find file\n");
+		exit(1);
+	}
+	while(fscanf("%c%c", &upperNibble, &lowerNibble) != EOF) {
+		firstByte.nibbles.upper = asciiToByte(upperNibble);
+		firstByte.nibbles.lower = asciiToByte(lowerNibble);
 
-	//irmovl register 0 <--- 0x 01 02 03 04
-	memory[j++] = 0x30;
-	memory[j++] = 0x80;
-	//value
-	memory[j++] = 0x04;
-	memory[j++] = 0x03;
-	memory[j++] = 0x02;
-	memory[j++] = 0x01;
+		memory[i++] = firstByte.byte;
+	}
 
-	//pushl register1 -> memory(esp - 4)
-	memory[j++] = 0xA0;
-	memory[j++] = 0x0F;
+//	i = 0;
+//
+//	//irmovl register 0 <--- 0x 01 02 03 04
+//	memory[i++] = 0x30;
+//	memory[i++] = 0x80;
+//	//value
+//	memory[i++] = 0x04;
+//	memory[i++] = 0x03;
+//	memory[i++] = 0x02;
+//	memory[i++] = 0x01;
+//
+//	//irmovl register 1 <-----0x 10 20 30 40
+//	memory[i++] = 0x30;
+//	memory[i++] = 0x81;
+//	//value
+//	memory[i++] = 0x40;
+//	memory[i++] = 0x30;
+//	memory[i++] = 0x20;
+//	memory[i++] = 0x10;
+//
+//	//addl register 0 + register 1 -> register 1
+//	memory[i++] = 0x60;
+//	memory[i++] = 0x01;
+//
+//	memory[i++] = 0x00;
 
-	//popl register 3 <--- memory(esp)
-	memory[j++] = 0XB0;
-	memory[j++] = 0x3F;
-
-	//ret
-	memory[j++] = 0x90;
-
-	//call 0x00 00 00 01 00 00
-	memory[i++] = 0x80;
-	memory[i++] = 0x00;
-	memory[i++] = 0x01;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-	memory[i++] = 0x00;
-
-	//irmovl
-	memory[i++] = 0x30;
-	memory[i++] = 0x87;
-	//value
-	memory[i++] = 0x11;
-	memory[i++] = 0x11;
-	memory[i++] = 0x22;
-	memory[i++] = 0x22;
-
-	//halt
-	memory[i++] = 0x00;
 
 	/* initialize program counter and flags and registers*/
 	PC = 0;
@@ -658,6 +668,74 @@ void ret(int *PC, mtype *memory, Register *regs) {
 		printf("ret: 90\n");
 	}
 }
+
+int asciiToByte(char ascii) {
+	/*
+	 * "A0" --> 0xA0 ===  0x41 0x30 ---> 0xA0
+	 */
+	int retval;
+	switch (ascii) {
+	case 'A':
+	case 'a':
+		retval = 0xA;
+		break;
+	case 'B':
+	case 'b':
+		retval = 0xB;
+		break;
+	case 'C':
+	case 'c':
+		retval = 0xC;
+		break;
+	case 'D':
+	case 'd':
+		retval = 0xD;
+		break;
+	case 'E':
+	case 'e':
+		retval = 0xE;
+		break;
+	case 'F':
+	case 'f':
+		retval = 0xF;
+		break;
+	case '0':
+		retval = 0x0;
+		break;
+	case '1':
+		retval = 0x1;
+		break;
+	case '2':
+		retval = 0x2;
+		break;
+	case '3':
+		retval = 0x3;
+		break;
+	case '4':
+		retval = 0x4;
+		break;
+	case '5':
+		retval = 0x5;
+		break;
+	case '6':
+		retval = 0x6;
+		break;
+	case '7':
+		retval = 0x7;
+		break;
+	case '8':
+		retval = 0x8;
+		break;
+	case '9':
+		retval = 0x9;
+		break;
+	default:
+		printf("Conversion gone wrong!");
+		exit(1);
+	}
+	return retval;
+}
+
 void printInstruction_6(char *instruction, int opcode, int nibl, int nibu, Register r) {
 	printf("%s: %2x %1x%1x %2x %2x %2x %2x\n",instruction, opcode, nibu, nibl,
 			r.bytes.byte_1.byte, r.bytes.byte_2.byte, r.bytes.byte_3.byte, r.bytes.byte_4.byte);
